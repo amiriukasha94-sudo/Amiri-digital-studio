@@ -34,12 +34,40 @@ export default async (req) => {
     const radius = 12000;
     const selector = categories[category].replaceAll("RADIUS", String(radius)).replaceAll("LAT", String(lat)).replaceAll("LON", String(lon));
     const query = '[out:json][timeout:20];(' + selector + ');out center tags 80;';
-    const overpass = await fetch("https://overpass-api.de/api/interpreter", {
-      method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
-      body: "data=" + encodeURIComponent(query), signal: AbortSignal.timeout(25000)
-    });
-    if (!overpass.ok) throw new Error("The public business directory is busy. Please try again shortly.");
-    const data = await overpass.json();
+    const mirrors = [
+      "https://overpass-api.de/api/interpreter",
+      "https://overpass.kumi.systems/api/interpreter",
+      "https://overpass.private.coffee/api/interpreter"
+    ];
+    let data = null;
+    let lastError = null;
+    for (const endpoint of mirrors) {
+      try {
+        const response = await fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
+          body: "data=" + encodeURIComponent(query),
+          signal: AbortSignal.timeout(25000)
+        });
+        if (!response.ok) {
+          lastError = new Error("Directory server returned HTTP " + response.status);
+          continue;
+        }
+        const payload = await response.json();
+        if (!Array.isArray(payload.elements)) {
+          lastError = new Error("Directory returned an invalid response.");
+          continue;
+        }
+        data = payload;
+        break;
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    if (!data) {
+      console.error("All Overpass mirrors failed:", lastError);
+      throw new Error("All public business directory servers are temporarily unavailable. Please try again later.");
+    }
     const leads = (data.elements || []).map(el => {
       const t = el.tags || {};
       const lat2 = el.lat ?? el.center?.lat, lon2 = el.lon ?? el.center?.lon;
