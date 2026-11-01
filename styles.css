@@ -33,3 +33,9 @@
 .lead-empty{grid-column:1/-1;padding:24px;text-align:center;color:#aaa49a;font-size:12px;border:1px dashed #ffffff25}
 .lead-search-form button:disabled,.lead-toolbar button:disabled{opacity:.5;cursor:not-allowed}
 @media(max-width:750px){.lead-search-form{grid-template-columns:1fr}.lead-search-form button{width:100%}.lead-results{grid-template-columns:1fr}.lead-toolbar{align-items:flex-start;flex-direction:column}}
+
+/* Lead contact actions */
+.lead-contacts a{color:#e4c88d;text-decoration:underline;text-underline-offset:3px;overflow-wrap:anywhere}
+.lead-card-actions .whatsapp-lead{background:#168b45;border-color:#168b45;color:#fff}
+.lead-card-actions .whatsapp-lead:hover{background:#11733a}
+.lead-card-actions a.btn{display:inline-flex;align-items:center;justify-content:center}
