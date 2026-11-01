@@ -86,11 +86,7 @@ export default async (req) => {
         leads
       });
     }
-    return json({
-      error: "Google Places is not configured yet. Add GOOGLE_PLACES_API_KEY in Netlify site environment variables to enable reliable business search. The free public-directory fallback is currently unavailable.",
-      setupRequired: true,
-      provider: "Google Places"
-    }, 503);
+    // No Google key configured: continue with the free OpenStreetMap fallback below.
     const geoRes = await fetch("https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q=" + encodeURIComponent(location), {
       headers: { "User-Agent": "AmiriDigitalStudioLeadFinder/1.0 (public business directory search)" },
       signal: AbortSignal.timeout(10000)
