@@ -87,13 +87,52 @@ export default async (req) => {
       });
     }
     // No Google key configured: continue with the free OpenStreetMap fallback below.
-    const geoRes = await fetch("https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q=" + encodeURIComponent(location), {
-      headers: { "User-Agent": "AmiriDigitalStudioLeadFinder/1.0 (public business directory search)" },
-      signal: AbortSignal.timeout(10000)
-    });
-    if (!geoRes.ok) throw new Error("Location lookup is temporarily unavailable.");
-    const places = await geoRes.json();
-    if (!places.length) return json({ error: "Location not found. Try a larger city or country name." }, 404);
+    // Geocoding providers can return HTML error pages during outages. Check content
+    // type and try Photon if Nominatim is throttled or unavailable.
+    const geocoders = [
+      {
+        name: "Nominatim",
+        url: "https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q=" + encodeURIComponent(location),
+        headers: { "User-Agent": "AmiriDigitalStudioLeadFinder/1.0 (business directory search)", "Accept": "application/json" },
+        parse: body => body
+      },
+      {
+        name: "Photon",
+        url: "https://photon.komoot.io/api/?limit=1&q=" + encodeURIComponent(location),
+        headers: { "Accept": "application/geo+json, application/json" },
+        parse: body => (body.features || []).map(feature => ({
+          lat: feature.geometry?.coordinates?.[1],
+          lon: feature.geometry?.coordinates?.[0],
+          display_name: [feature.properties?.name, feature.properties?.city, feature.properties?.state, feature.properties?.country].filter(Boolean).join(", ")
+        }))
+      }
+    ];
+    let places = [];
+    const geoFailures = [];
+    for (const geocoder of geocoders) {
+      try {
+        const response = await fetch(geocoder.url, { headers: geocoder.headers, signal: AbortSignal.timeout(12000) });
+        const contentType = response.headers.get("content-type") || "";
+        const bodyText = await response.text();
+        if (!response.ok) {
+          geoFailures.push(geocoder.name + " HTTP " + response.status);
+          continue;
+        }
+        if (!contentType.toLowerCase().includes("json")) {
+          geoFailures.push(geocoder.name + " returned non-JSON (" + contentType + ")");
+          continue;
+        }
+        const parsed = JSON.parse(bodyText);
+        places = geocoder.parse(parsed);
+        if (places.length && Number.isFinite(Number(places[0].lat)) && Number.isFinite(Number(places[0].lon))) break;
+      } catch (error) {
+        geoFailures.push(geocoder.name + " " + (error.name || "error"));
+      }
+    }
+    if (!places.length) {
+      console.error("All geocoders failed:", geoFailures);
+      return json({ error: "Could not locate that city right now. Check the spelling or try a larger city. Location providers may be temporarily unavailable.", provider: "OpenStreetMap/Photon", diagnostics: geoFailures }, 503);
+    }
     const place = places[0], lat = Number(place.lat), lon = Number(place.lon);
     const radius = 12000;
     const selector = categories[category].replaceAll("RADIUS", String(radius)).replaceAll("LAT", String(lat)).replaceAll("LON", String(lon));
@@ -126,7 +165,15 @@ export default async (req) => {
             failures.push(endpoint + " HTTP " + response.status + (detail ? ": " + detail : ""));
             continue;
           }
-          const payload = await response.json();
+          const contentType = response.headers.get("content-type") || "";
+          const responseText = await response.text();
+          if (!contentType.toLowerCase().includes("json")) {
+            failures.push(endpoint + " returned non-JSON (" + contentType + ")");
+            continue;
+          }
+          let payload;
+          try { payload = JSON.parse(responseText); }
+          catch { failures.push(endpoint + " returned malformed JSON"); continue; }
           if (!Array.isArray(payload.elements)) {
             failures.push(endpoint + " returned invalid JSON data");
             continue;
