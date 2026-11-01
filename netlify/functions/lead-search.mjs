@@ -134,86 +134,86 @@ export default async (req) => {
       return json({ error: "Could not locate that city right now. Check the spelling or try a larger city. Location providers may be temporarily unavailable.", provider: "OpenStreetMap/Photon", diagnostics: geoFailures }, 503);
     }
     const place = places[0], lat = Number(place.lat), lon = Number(place.lon);
-    const radius = 12000;
-    const selector = categories[category].replaceAll("RADIUS", String(radius)).replaceAll("LAT", String(lat)).replaceAll("LON", String(lon));
-    const query = '[out:json][timeout:15];(' + selector + ');out center tags 80;';
-    // Public community instances are best-effort. Rotate hosts and retry with a smaller
-    // radius before reporting a real outage. No API key or paid service is required.
-    const mirrors = [
-      "https://overpass.private.coffee/api/interpreter",
-      "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
-      "https://overpass-api.de/api/interpreter"
-    ];
-    let data = null;
-    const failures = [];
-    const radii = [12000, 5000];
-    for (const searchRadius of radii) {
-      const radiusQuery = query.replaceAll(String(radius), String(searchRadius));
-      for (const endpoint of mirrors) {
-        try {
-          const response = await fetch(endpoint, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
-              "Accept": "application/json"
-            },
-            body: "data=" + encodeURIComponent(radiusQuery),
-            signal: AbortSignal.timeout(18000)
-          });
-          if (!response.ok) {
-            const detail = (await response.text().catch(() => "")).slice(0, 180);
-            failures.push(endpoint + " HTTP " + response.status + (detail ? ": " + detail : ""));
-            continue;
-          }
-          const contentType = response.headers.get("content-type") || "";
-          const responseText = await response.text();
-          if (!contentType.toLowerCase().includes("json")) {
-            failures.push(endpoint + " returned non-JSON (" + contentType + ")");
-            continue;
-          }
-          let payload;
-          try { payload = JSON.parse(responseText); }
-          catch { failures.push(endpoint + " returned malformed JSON"); continue; }
-          if (!Array.isArray(payload.elements)) {
-            failures.push(endpoint + " returned invalid JSON data");
-            continue;
-          }
-          data = payload;
-          break;
-        } catch (error) {
-          failures.push(endpoint + " " + (error.name || "error"));
+    // Photon indexes OpenStreetMap places and can search POIs directly.
+    // This avoids dependence on public Overpass interpreter servers.
+    const photonTerms = {
+      all: ["business", "shop", "restaurant", "hotel", "office", "clinic", "salon"],
+      restaurant: ["restaurant", "cafe"],
+      retail: ["shop", "store"],
+      beauty: ["beauty salon", "hairdresser", "cosmetics"],
+      hotel: ["hotel", "guest house", "hostel"],
+      professional: ["office", "professional service"],
+      health: ["clinic", "doctor", "dentist", "pharmacy"]
+    }[category];
+    const found = new Map();
+    const photonFailures = [];
+    for (const term of photonTerms) {
+      try {
+        const endpoint = "https://photon.komoot.io/api/?q=" + encodeURIComponent(term) +
+          "&lat=" + encodeURIComponent(lat) + "&lon=" + encodeURIComponent(lon) + "&limit=50&lang=en";
+        const response = await fetch(endpoint, {
+          headers: { "Accept": "application/geo+json, application/json" },
+          signal: AbortSignal.timeout(12000)
+        });
+        const contentType = response.headers.get("content-type") || "";
+        const body = await response.text();
+        if (!response.ok || !contentType.toLowerCase().includes("json")) {
+          photonFailures.push(term + ": HTTP " + response.status);
+          continue;
         }
+        let payload;
+        try { payload = JSON.parse(body); }
+        catch { photonFailures.push(term + ": invalid JSON"); continue; }
+        for (const feature of payload.features || []) {
+          const p = feature.properties || {};
+          const name = p.name || p.street || "";
+          if (!p.name) continue;
+          const coords = feature.geometry?.coordinates || [];
+          const key = String(p.osm_type || p.osm_value || "") + "-" + String(p.osm_id || name.toLowerCase() + "-" + (p.city || ""));
+          const website = p.website || p.url || "";
+          const phone = p.phone || "";
+          const address = [p.housenumber, p.street, p.city, p.state, p.country].filter(Boolean).join(", ");
+          const type = p.type || p.osm_value || p.osm_key || category;
+          const score = (!website ? 60 : 10) + (phone ? 15 : 0);
+          const item = {
+            id: "photon-" + key,
+            name,
+            category: String(type).replaceAll("_", " "),
+            website,
+            websiteStatus: website ? "Website listed — review manually" : "No website returned — verify manually",
+            phone,
+            email: "",
+            score,
+            address,
+            lat: Number.isFinite(coords[1]) ? coords[1] : null,
+            lon: Number.isFinite(coords[0]) ? coords[0] : null,
+            source: "OpenStreetMap via Photon",
+            sourceUrl: p.osm_id && p.osm_type
+              ? "https://www.openstreetmap.org/" + (p.osm_type === "R" ? "relation" : p.osm_type === "W" ? "way" : "node") + "/" + p.osm_id
+              : "https://www.openstreetmap.org/search?query=" + encodeURIComponent(name + " " + address)
+          };
+          if (!found.has(key)) found.set(key, item);
+        }
+      } catch (error) {
+        photonFailures.push(term + ": " + (error.name || "request failed"));
       }
-      if (data) break;
     }
-    if (!data) {
-      console.error("All free OSM search endpoints failed:", failures);
+    const leads = Array.from(found.values()).sort((a,b) => b.score-a.score).slice(0,80);
+    if (!leads.length) {
+      console.error("Photon POI search returned no leads:", photonFailures);
       return json({
-        error: "The free OpenStreetMap search servers are temporarily overloaded or unreachable. Please retry later; no paid API is being used.",
-        provider: "OpenStreetMap",
-        diagnostics: failures.slice(0, 6)
+        error: "The free OpenStreetMap place search did not return results for this location. Try a nearby larger city or retry later.",
+        provider: "OpenStreetMap via Photon",
+        diagnostics: photonFailures.slice(0, 7)
       }, 503);
     }
-    const leads = (data.elements || []).map(el => {
-      const t = el.tags || {};
-      const lat2 = el.lat ?? el.center?.lat, lon2 = el.lon ?? el.center?.lon;
-      const website = t.website || t["contact:website"] || "";
-      const phone = t.phone || t["contact:phone"] || "";
-      const email = t.email || t["contact:email"] || "";
-      const type = Object.entries(t).find(([k]) => ["shop","amenity","office","tourism","craft"].includes(k));
-      const missing = !website;
-      const score = (missing ? 60 : 10) + (!phone ? 0 : 10) + (!email ? 0 : 5) + (website && !website.startsWith("https://") ? 5 : 0);
-      return {
-        id: "osm-" + el.type + "-" + el.id, name: t.name || "Unnamed business",
-        category: type ? type[1].replaceAll("_"," ") : "business",
-        website, websiteStatus: missing ? "No website listed" : "Website listed — review manually",
-        phone, email, score, address: [t["addr:street"],t["addr:city"],t["addr:country"]].filter(Boolean).join(", "),
-        lat: lat2 || null, lon: lon2 || null,
-        source: "OpenStreetMap", sourceUrl: "https://www.openstreetmap.org/" + el.type + "/" + el.id
-      };
-    }).filter(x => x.name !== "Unnamed business")
-      .sort((a,b) => b.score-a.score).slice(0,80);
-    return json({ location: place.display_name, count: leads.length, radiusKm: 12, source: "OpenStreetMap", note: "Listings are community-maintained and may be incomplete. A missing website means none is listed in OpenStreetMap, not proof the business has no website.", leads });
+    return json({
+      location: place.display_name,
+      count: leads.length,
+      provider: "OpenStreetMap via Photon",
+      note: "Photon searches OpenStreetMap place records. Coverage varies by city. Missing contact details or websites are not proof that a business lacks them; verify each lead before outreach.",
+      leads
+    });
   } catch (e) {
     return json({ error: e.name === "TimeoutError" ? "Search timed out. Try again." : (e.message || "Lead search failed.") }, 502);
   }
