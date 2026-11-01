@@ -30,12 +30,12 @@ export default async (req) => {
     const record = await read.json();
     if (!read.ok) throw new Error(record.error?.message || "Could not find Airtable lead.");
     const stamp = new Date().toISOString();
-    const note = (record.fields?.Notes || "") + "\\n\\nOWNER DECISION: " + decision + "\\nDecision time (UTC): " + stamp + "\\nDecision by Telegram owner.";
+    const note = (record.fields?.Notes || "") + "\n\nOWNER DECISION: " + decision + "\nDecision time (UTC): " + stamp + "\nDecision by Telegram owner.";
     const save = await fetch(recordUrl, { method: "PATCH", headers, body: JSON.stringify({ fields: { Notes: note } }) });
     if (!save.ok) throw new Error("Could not save owner decision to Airtable.");
     await fetch(api + "answerCallbackQuery", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ callback_query_id: cb.id, text: decision }) });
     const original = cb.message?.text || "New enquiry";
-    const revised = original + "\\n\\nOWNER DECISION: " + decision + "\\nRecorded in Airtable. This action does not send anything to the customer or publish a project.";
+    const revised = original + "\n\nOWNER DECISION: " + decision + "\nRecorded in Airtable. This action does not send anything to the customer or publish a project.";
     await fetch(api + "editMessageText", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chat_id: env.TELEGRAM_CHAT_ID, message_id: cb.message.message_id, text: revised, disable_web_page_preview: true }) });
     return Response.json({ ok: true });
   } catch (error) {
