@@ -60,3 +60,23 @@ The page describes proposed starting prices only; they are not a binding quote, 
 To prepare the database foundation, run `supabase/licensing.sql` after `supabase/schema.sql`. It creates central licence, brand-workspace and audit tables. RLS currently permits only the verified Amiri owner role to access these tables. Investor/customer policies are deliberately not enabled until tenant authentication and isolation are implemented and tested. This is a schema foundation, not a functioning investor dashboard or automated licence enforcement.
 
 Do not promise investors that they own the underlying website, source code, platform or Amiri business. They receive only the rights expressly granted in a signed licence. Third-party software, fonts, images and services remain subject to their own licences.
+
+## Central owner console (development)
+Owner dashboard route: `/admin/`. The console uses Supabase Auth email/password login; it has no hard-coded admin password. The Netlify Function verifies the authenticated user and checks `profiles.role = 'owner'` before allowing licence operations.
+
+Required Netlify environment variables:
+- `SUPABASE_URL`
+- `SUPABASE_ANON_KEY` (public project anon key; the function returns it only where needed for auth configuration)
+- `SUPABASE_SERVICE_ROLE_KEY` (secret; server-side only, never expose in browser code or GitHub)
+
+Setup:
+1. Create the Supabase project and run `supabase/schema.sql`.
+2. Run `supabase/licensing.sql`.
+3. Create your own Supabase Auth user using an email you control and a strong unique password. Enable MFA in Supabase Auth where available.
+4. In the Supabase SQL Editor, verify your Auth user UUID, then grant the owner role only to that exact account by inserting/updating its `public.profiles` row with `role='owner'`. Never let public signup or client-side code set owner role.
+5. Add the three environment variables above to Netlify and redeploy the development branch.
+6. Visit `/admin/` and test sign-in, create pending licence, update status and save brand workspace.
+
+Security boundaries: the dashboard does not store the password or access token in localStorage; the access token exists in page memory and is cleared on sign-out/refresh. The owner API revalidates the Supabase user and owner role on every request. Keep the service-role key private. A licence status change is not proof of payment; manually verify signed agreements and cleared funds before activation.
+
+Current scope: owner-only licence listing/creation/status changes and basic brand workspace records. Investor accounts, tenant-scoped access, customer data isolation, automated renewals/expiry enforcement, custom-domain provisioning, billing and production security testing are not implemented. Do not sell or advertise these as completed features yet. Use a qualified local lawyer to review franchise/licence agreements and investor disclosures.
