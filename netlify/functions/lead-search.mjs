@@ -209,6 +209,12 @@ export default async (req) => {
             websiteStatus: website ? "Website listed — review manually" : "No website recorded in this listing — verify manually",
             phone,
             email,
+            facebook: p.facebook || "",
+            instagram: p.instagram || "",
+            openingHours: p.opening_hours || "",
+            osmType: p.osm_type || "",
+            osmId: p.osm_id || "",
+            osmClass: p.osm_key || "",
             score,
             address,
             lat: itemLat,
@@ -225,6 +231,42 @@ export default async (req) => {
       }
     }
     const leads = Array.from(found.values()).sort((a,b) => b.score-a.score).slice(0,80);
+
+    // Enrich a limited number of leads from the public OSM object details.
+    // These fields are optional and only shown when explicitly present in OSM.
+    const enrichable = leads.filter(x => x.osmType && x.osmId).slice(0,24);
+    let enrichIndex = 0;
+    const enrichWorker = async () => {
+      while (enrichIndex < enrichable.length) {
+        const lead = enrichable[enrichIndex++];
+        try {
+          const detailUrl = "https://nominatim.openstreetmap.org/details?osmtype=" +
+            encodeURIComponent(lead.osmType) + "&osmid=" + encodeURIComponent(lead.osmId) +
+            "&class=" + encodeURIComponent(lead.osmClass || "") + "&addressdetails=1&hierarchy=0&group_hierarchy=0&format=json";
+          const response = await fetch(detailUrl, {
+            headers: { "User-Agent": "AmiriDigitalStudioLeadFinder/1.0 (public OSM contact enrichment)", "Accept": "application/json" },
+            signal: AbortSignal.timeout(7000)
+          });
+          if (!response.ok || !(response.headers.get("content-type") || "").includes("json")) continue;
+          const detail = await response.json();
+          const tags = detail.extratags || detail.tags || {};
+          lead.phone = tags.phone || tags["contact:phone"] || "";
+          lead.email = tags.email || tags["contact:email"] || "";
+          lead.website = tags.website || tags["contact:website"] || lead.website || "";
+          lead.websiteStatus = lead.website ? "Website listed — review manually" : "No website recorded in this listing — verify manually";
+          lead.facebook = tags["contact:facebook"] || tags.facebook || "";
+          lead.instagram = tags["contact:instagram"] || tags.instagram || "";
+          lead.openingHours = tags.opening_hours || "";
+          lead.contactSource = "OpenStreetMap object details";
+          lead.score = (!lead.website ? 45 : 5) + (lead.phone ? 20 : 0) + (lead.email ? 15 : 0) + (lead.address ? 5 : 0) + (lead.name.length > 5 ? 5 : 0);
+        } catch (error) {
+          // Keep the base listing if optional contact enrichment is unavailable.
+        }
+      }
+    };
+    await Promise.all(Array.from({length: 3}, () => enrichWorker()));
+    leads.sort((a,b) => b.score-a.score);
+
     if (!leads.length) {
       console.error("Photon POI search returned no leads:", photonFailures);
       return json({
