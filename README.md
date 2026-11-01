@@ -48,3 +48,15 @@ Setup:
 The client approval is a design sign-off only. It does not publish the website, verify payment or activate hosting. The draft preview page is `/draft-preview.html`. Repeat saves from the same browser update the same share link and add a revision-history entry. Clearing browser storage loses the local token; the existing cloud link remains available to anyone who already has it.
 
 Security note: the share URL is a bearer link. Anyone who receives it can view the draft and submit feedback. Do not put sensitive personal data in a website brief. The initial version does not yet include customer accounts, owner authentication, automated rate limiting or automatic publication. Add those controls before large-scale public launch. Configure Supabase backups and monitor function/database usage.
+
+## Investor licensing foundation (development branch)
+The investor page is `/partners.html`. It presents two commercial models:
+- White-label: a partner operates under their own brand using a licensed Amiri platform workspace.
+- Franchise: a partner operates within a separately agreed territory and franchise contract.
+- Enterprise: negotiated deployment and service terms.
+
+The page describes proposed starting prices only; they are not a binding quote, revenue promise or completed franchise offer. Use a written agreement reviewed for the relevant jurisdiction before accepting investor funds. The agreement should define term, territory, permitted use, fees, renewals, support, data ownership/access/export, security, third-party costs, termination, transition and dispute resolution.
+
+To prepare the database foundation, run `supabase/licensing.sql` after `supabase/schema.sql`. It creates central licence, brand-workspace and audit tables. RLS currently permits only the verified Amiri owner role to access these tables. Investor/customer policies are deliberately not enabled until tenant authentication and isolation are implemented and tested. This is a schema foundation, not a functioning investor dashboard or automated licence enforcement.
+
+Do not promise investors that they own the underlying website, source code, platform or Amiri business. They receive only the rights expressly granted in a signed licence. Third-party software, fonts, images and services remain subject to their own licences.
