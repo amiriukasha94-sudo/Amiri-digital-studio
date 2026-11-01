@@ -34,3 +34,17 @@ Generated HTML is a draft only. Exporting downloads the HTML; it does not regist
 
 ## Existing enquiry submission setup
 The general enquiry form currently uses Airtable and Telegram. It will continue to report missing environment variables until `AIRTABLE_TOKEN`, `TELEGRAM_BOT_TOKEN`, and `TELEGRAM_CHAT_ID` are configured in Netlify. These are separate from AI generation.
+
+## Private client draft sharing
+The AI Studio now supports a private cloud preview handoff. A client can generate a website, then choose **Save & send to Amiri**. The server creates an unguessable 256-bit share token, stores only its SHA-256 hash in Supabase, and opens normal WhatsApp with the private preview URL. The recipient must still tap Send in WhatsApp. Links expire after 30 days.
+
+Setup:
+1. Create a Supabase project.
+2. In its SQL Editor, run `supabase/draft-sharing.sql`.
+3. In Netlify environment variables, add `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`. Keep the service-role key server-side only; never expose it in browser code or GitHub.
+4. Redeploy the development branch and test with a sample draft.
+5. Open the preview link on a different device and test both **Approve design** and **Request changes**.
+
+The client approval is a design sign-off only. It does not publish the website, verify payment or activate hosting. The draft preview page is `/draft-preview.html`. Repeat saves from the same browser update the same share link and add a revision-history entry. Clearing browser storage loses the local token; the existing cloud link remains available to anyone who already has it.
+
+Security note: the share URL is a bearer link. Anyone who receives it can view the draft and submit feedback. Do not put sensitive personal data in a website brief. The initial version does not yet include customer accounts, owner authentication, automated rate limiting or automatic publication. Add those controls before large-scale public launch. Configure Supabase backups and monitor function/database usage.
