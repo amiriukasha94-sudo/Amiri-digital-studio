@@ -61,22 +61,15 @@ To prepare the database foundation, run `supabase/licensing.sql` after `supabase
 
 Do not promise investors that they own the underlying website, source code, platform or Amiri business. They receive only the rights expressly granted in a signed licence. Third-party software, fonts, images and services remain subject to their own licences.
 
-## Central owner console (development)
-Owner dashboard route: `/admin/`. The console uses Supabase Auth email/password login; it has no hard-coded admin password. The Netlify Function verifies the authenticated user and checks `profiles.role = 'owner'` before allowing licence operations.
+## Simple owner console (no database required for this first version)
 
-Required Netlify environment variables:
-- `SUPABASE_URL`
-- `SUPABASE_ANON_KEY` (public project anon key; the function returns it only where needed for auth configuration)
-- `SUPABASE_SERVICE_ROLE_KEY` (secret; server-side only, never expose in browser code or GitHub)
+The owner route is `/admin/`. It uses one password stored as a Netlify environment secret. The server issues a signed session token that expires after 8 hours. The password is never embedded in the website source.
 
-Setup:
-1. Create the Supabase project and run `supabase/schema.sql`.
-2. Create your own user in Supabase Authentication. Use a unique password and enable MFA if available.
-3. Copy that user's UUID from Authentication → Users. In the Supabase SQL Editor, run `supabase/owner-security.sql` after replacing the UUID in its final provisioning statement; uncomment that statement first. Verify the row shows `role = 'owner'`. Never allow public signup or browser code to set owner role.
-4. Run `supabase/licensing.sql`.
-5. Add the three Supabase environment variables above to Netlify. Also set `SITE_ORIGIN` to the exact deployed site origin (for example `https://your-site.netlify.app`, with no trailing slash). Netlify supplies `DEPLOY_PRIME_URL` for deploy previews. Redeploy the development branch.
-6. Visit `/admin/` and test sign-in, create a pending licence, update status and save a brand workspace. Do not activate a licence until the agreement is signed and payment is independently verified.
+In Netlify → Site configuration → Environment variables, add:
+- `ADMIN_PASSWORD`: a long, unique password (at least 16 characters).
+- `ADMIN_SESSION_SECRET`: a separate random secret of at least 32 characters.
+- `SITE_ORIGIN`: exact site origin, e.g. `https://your-site.netlify.app` (no trailing slash).
 
-Security boundaries: the dashboard does not store the password or access token in localStorage; the access token exists in page memory and is cleared on sign-out/refresh. The owner API revalidates the Supabase user and owner role on every request, restricts browser origins to `SITE_ORIGIN` and Netlify's deploy-preview origin, and validates fee amounts. Keep the service-role key private. Configure Supabase Auth MFA and monitor failed sign-ins; this version does not yet include an application-level rate limiter or automated security test suite. A licence status change is not proof of payment; manually verify signed agreements and cleared funds before activation.
+Save the variables and trigger a new deploy. Then visit `/admin/` and sign in. Do not put either secret in GitHub, HTML, or chat. Use a password manager and enable Netlify account MFA.
 
-Current scope: owner-only licence listing/creation/status changes and basic brand workspace records. Investor accounts, tenant-scoped access, customer data isolation, automated renewals/expiry enforcement, custom-domain provisioning, billing and production security testing are not implemented. Do not sell or advertise these as completed features yet. Use a qualified local lawyer to review franchise/licence agreements and investor disclosures.
+**Important limitation:** this no-database version saves investor/licence records only in the browser's local storage on the device where you use the dashboard. It does not sync between phones/computers, and clearing browser data can erase the records. Use **Export CSV backup** regularly. These records are drafts only, not signed contracts or proof of payment. Do not sell this as a multi-investor cloud platform yet. The old Supabase owner setup is not required for this simple console, though other site features may still use Supabase.
