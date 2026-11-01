@@ -39,3 +39,5 @@
 .lead-card-actions .whatsapp-lead{background:#168b45;border-color:#168b45;color:#fff}
 .lead-card-actions .whatsapp-lead:hover{background:#11733a}
 .lead-card-actions a.btn{display:inline-flex;align-items:center;justify-content:center}
+
+.payment-panel{max-width:680px;padding:26px;border:1px solid #d6ad6250;background:#ffffff08}.payment-panel h3{font:30px 'Playfair Display';color:#e4c88d;margin:8px 0}.payment-panel>p{color:#c8c1b4;font-size:13px;line-height:1.7}.payment-panel form{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:22px 0}.payment-panel label{display:grid;gap:7px;color:#d8c9aa;font-size:11px}.payment-panel input{min-width:0;padding:12px;border:1px solid #ffffff30;border-radius:4px;background:#111;color:#f4eee2;font:inherit}.payment-panel .consent,.payment-panel button,.payment-panel #payment-status{grid-column:1/-1}.payment-panel .consent{display:flex;align-items:center;gap:9px}.payment-panel .consent input{width:auto}.payment-panel small{color:#aaa49a;font-size:10px;line-height:1.6}@media(max-width:650px){.payment-panel{padding:17px}.payment-panel form{grid-template-columns:1fr}}
