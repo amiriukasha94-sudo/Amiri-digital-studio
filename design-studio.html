@@ -5,6 +5,39 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js"></script>
 <style>
 :root{--gold:#d9ae5d;--bg:#090909;--panel:#151515;--line:#343434}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:#f7f2e8;font:14px system-ui,Arial}header{padding:14px 4%;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center}a{color:var(--gold)}main{max-width:1500px;margin:auto;padding:18px}.hero{display:flex;justify-content:space-between;align-items:center;gap:15px;flex-wrap:wrap}.gold{color:var(--gold)}.layout{display:grid;grid-template-columns:270px minmax(0,1fr) 245px;gap:12px;margin-top:16px}.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:12px}.panel h3{margin:0 0 12px;color:var(--gold)}label{display:block;color:#bbb;margin:8px 0 4px}input,select,textarea{width:100%;padding:9px;background:#080808;color:white;border:1px solid #444;border-radius:7px;margin:3px 0 8px}button,.btn{background:var(--gold);color:#111;border:0;border-radius:7px;padding:9px 12px;font-weight:700;cursor:pointer;margin:3px 2px}button.secondary{background:#333;color:white}button:disabled{opacity:.4;cursor:not-allowed}.toolbar{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:10px}.stage{min-height:580px;background:#242424;border-radius:10px;padding:20px;display:flex;align-items:center;justify-content:center;overflow:auto}.canvas-container{box-shadow:0 12px 45px #000}.canvas-container canvas{max-width:100%;height:auto}.hint,.status{font-size:12px;color:#aaa;line-height:1.5}.status{color:#e7c987;white-space:pre-wrap}.plans{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}.plan{border:1px solid #444;padding:10px;border-radius:8px}.price{font-size:20px;color:var(--gold);font-weight:800}.stack button{width:100%;text-align:left}.hidden{display:none!important}@media(max-width:1000px){.layout{grid-template-columns:1fr}.stage{min-height:400px}.plans{grid-template-columns:repeat(2,1fr)}}@media(max-width:480px){main{padding:10px}.stage{padding:6px;min-height:300px}.hero h1{font-size:25px}}
+/* Live motion layer */
+:root{scroll-behavior:smooth}
+body{background:radial-gradient(ellipse at 12% 0%,rgba(217,174,93,.10),transparent 34%),radial-gradient(ellipse at 90% 24%,rgba(217,174,93,.055),transparent 28%),var(--bg);background-attachment:fixed}
+header{position:sticky;top:0;z-index:20;background:rgba(9,9,9,.86);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px)}
+header b .gold{display:inline-block;animation:goldPulse 3.8s ease-in-out infinite}
+.hero>div:first-child{animation:heroRise .8s cubic-bezier(.2,.75,.25,1) both}
+.hero h1{background:linear-gradient(100deg,#fff2d2 5%,#d9ae5d 42%,#fff0c7 70%,#c18c36 95%);background-size:220% auto;background-clip:text;-webkit-background-clip:text;color:transparent;animation:titleShimmer 7s linear infinite}
+.panel{position:relative;overflow:hidden;transition:transform .28s ease,border-color .28s ease,box-shadow .28s ease}
+.panel:before{content:"";position:absolute;inset:0 auto 0 -120%;width:65%;pointer-events:none;background:linear-gradient(105deg,transparent,rgba(255,255,255,.035),transparent);transform:skewX(-18deg);transition:left .8s ease}
+.panel:hover{transform:translateY(-2px);border-color:rgba(217,174,93,.48);box-shadow:0 12px 34px rgba(0,0,0,.2),0 0 22px rgba(217,174,93,.045)}
+.panel:hover:before{left:150%}
+button,.btn{position:relative;overflow:hidden;transition:transform .18s ease,filter .18s ease,box-shadow .18s ease}
+button:hover,.btn:hover{transform:translateY(-2px);filter:brightness(1.09);box-shadow:0 6px 18px rgba(217,174,93,.17)}
+button:active,.btn:active{transform:translateY(0) scale(.97)}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--gold);outline-offset:3px}
+.plan{transition:transform .25s ease,border-color .25s ease,background .25s ease}
+.plan:hover{transform:translateY(-4px);border-color:var(--gold);background:rgba(217,174,93,.055)}
+.stage{background-image:radial-gradient(rgba(217,174,93,.10) 1px,transparent 1px);background-size:22px 22px;animation:stageGlow 8s ease-in-out infinite alternate}
+.canvas-container{transition:box-shadow .3s ease;animation:canvasEnter .65s cubic-bezier(.2,.75,.25,1) both}
+.canvas-container:hover{box-shadow:0 18px 55px rgba(0,0,0,.55),0 0 26px rgba(217,174,93,.11)}
+#aiGenerate:not(:disabled){animation:buttonBreath 3s ease-in-out infinite}
+#aiGenerate:disabled{background:linear-gradient(100deg,#8e6c32,#f1d18c,#8e6c32);background-size:200% 100%;animation:loadingSweep 1.3s linear infinite}
+.status:not(:empty){animation:statusIn .25s ease both}
+@keyframes heroRise{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:translateY(0)}}
+@keyframes canvasEnter{from{opacity:.45;transform:scale(.985)}to{opacity:1;transform:scale(1)}}
+@keyframes titleShimmer{0%{background-position:100% center}100%{background-position:-120% center}}
+@keyframes goldPulse{0%,100%{text-shadow:0 0 0 rgba(217,174,93,0)}50%{text-shadow:0 0 13px rgba(217,174,93,.55)}}
+@keyframes stageGlow{from{background-color:#202020}to{background-color:#29251e}}
+@keyframes buttonBreath{0%,100%{box-shadow:0 0 0 rgba(217,174,93,0)}50%{box-shadow:0 0 17px rgba(217,174,93,.18)}}
+@keyframes loadingSweep{to{background-position:-200% 0}}
+@keyframes statusIn{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
+@media(prefers-reduced-motion:reduce){*,*:before,*:after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
+
 </style></head><body>
 <header><b>AMIRI DIGITAL STUDIO <span class="gold">· DESIGN LAB</span></b><a href="/">Main website ↗</a></header>
 <main><section class="hero"><div><p class="gold">CREATE · EDIT · EXPORT</p><h1>Design workspace 2.0</h1><p class="hint">A mobile-friendly canvas for social graphics and print layouts.</p></div><div><button class="secondary" id="signOut" hidden>Sign out</button></div></section>
