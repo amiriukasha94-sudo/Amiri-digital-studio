@@ -101,40 +101,55 @@ export default async (req) => {
     const place = places[0], lat = Number(place.lat), lon = Number(place.lon);
     const radius = 12000;
     const selector = categories[category].replaceAll("RADIUS", String(radius)).replaceAll("LAT", String(lat)).replaceAll("LON", String(lon));
-    const query = '[out:json][timeout:20];(' + selector + ');out center tags 80;';
+    const query = '[out:json][timeout:15];(' + selector + ');out center tags 80;';
+    // Public community instances are best-effort. Rotate hosts and retry with a smaller
+    // radius before reporting a real outage. No API key or paid service is required.
     const mirrors = [
-      "https://overpass-api.de/api/interpreter",
-      "https://overpass.kumi.systems/api/interpreter",
-      "https://overpass.private.coffee/api/interpreter"
+      "https://overpass.private.coffee/api/interpreter",
+      "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
+      "https://overpass-api.de/api/interpreter"
     ];
     let data = null;
-    let lastError = null;
-    for (const endpoint of mirrors) {
-      try {
-        const response = await fetch(endpoint, {
-          method: "POST",
-          headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
-          body: "data=" + encodeURIComponent(query),
-          signal: AbortSignal.timeout(25000)
-        });
-        if (!response.ok) {
-          lastError = new Error("Directory server returned HTTP " + response.status);
-          continue;
+    const failures = [];
+    const radii = [12000, 5000];
+    for (const searchRadius of radii) {
+      const radiusQuery = query.replaceAll(String(radius), String(searchRadius));
+      for (const endpoint of mirrors) {
+        try {
+          const response = await fetch(endpoint, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
+              "Accept": "application/json"
+            },
+            body: "data=" + encodeURIComponent(radiusQuery),
+            signal: AbortSignal.timeout(18000)
+          });
+          if (!response.ok) {
+            const detail = (await response.text().catch(() => "")).slice(0, 180);
+            failures.push(endpoint + " HTTP " + response.status + (detail ? ": " + detail : ""));
+            continue;
+          }
+          const payload = await response.json();
+          if (!Array.isArray(payload.elements)) {
+            failures.push(endpoint + " returned invalid JSON data");
+            continue;
+          }
+          data = payload;
+          break;
+        } catch (error) {
+          failures.push(endpoint + " " + (error.name || "error"));
         }
-        const payload = await response.json();
-        if (!Array.isArray(payload.elements)) {
-          lastError = new Error("Directory returned an invalid response.");
-          continue;
-        }
-        data = payload;
-        break;
-      } catch (error) {
-        lastError = error;
       }
+      if (data) break;
     }
     if (!data) {
-      console.error("All Overpass mirrors failed:", lastError);
-      throw new Error("All public business directory servers are temporarily unavailable. Please try again later.");
+      console.error("All free OSM search endpoints failed:", failures);
+      return json({
+        error: "The free OpenStreetMap search servers are temporarily overloaded or unreachable. Please retry later; no paid API is being used.",
+        provider: "OpenStreetMap",
+        diagnostics: failures.slice(0, 6)
+      }, 503);
     }
     const leads = (data.elements || []).map(el => {
       const t = el.tags || {};
