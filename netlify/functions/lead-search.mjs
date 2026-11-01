@@ -6,13 +6,13 @@ const cors = {
 };
 const json = (data, status = 200) => Response.json(data, { status, headers: cors });
 const categories = {
-  all: 'node["name"](around:RADIUS,LAT,LON);way["name"](around:RADIUS,LAT,LON);relation["name"](around:RADIUS,LAT,LON);',
-  restaurant: 'nwr["amenity"~"restaurant|cafe|fast_food|bar"]["name"](around:RADIUS,LAT,LON);',
-  retail: 'nwr["shop"]["name"](around:RADIUS,LAT,LON);',
-  beauty: 'nwr["shop"~"beauty|hairdresser|cosmetics"]["name"](around:RADIUS,LAT,LON);',
-  hotel: 'nwr["tourism"~"hotel|guest_house|hostel"]["name"](around:RADIUS,LAT,LON);',
-  professional: 'nwr["office"]["name"](around:RADIUS,LAT,LON);',
-  health: 'nwr["amenity"~"clinic|doctors|dentist|pharmacy"]["name"](around:RADIUS,LAT,LON);'
+  all: 'nwr(around:RADIUS,LAT,LON)["name"];',
+  restaurant: 'nwr(around:RADIUS,LAT,LON)["amenity"~"restaurant|cafe|fast_food|bar"]["name"];',
+  retail: 'nwr(around:RADIUS,LAT,LON)["shop"]["name"];',
+  beauty: 'nwr(around:RADIUS,LAT,LON)["shop"~"beauty|hairdresser|cosmetics"]["name"];',
+  hotel: 'nwr(around:RADIUS,LAT,LON)["tourism"~"hotel|guest_house|hostel"]["name"];',
+  professional: 'nwr(around:RADIUS,LAT,LON)["office"]["name"];',
+  health: 'nwr(around:RADIUS,LAT,LON)["amenity"~"clinic|doctors|dentist|pharmacy"]["name"];'
 };
 export default async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: cors });
@@ -33,7 +33,7 @@ export default async (req) => {
     const place = places[0], lat = Number(place.lat), lon = Number(place.lon);
     const radius = 12000;
     const selector = categories[category].replaceAll("RADIUS", String(radius)).replaceAll("LAT", String(lat)).replaceAll("LON", String(lon));
-    const query = '[out:json][timeout:20];(' + selector + ');out tags center 80;';
+    const query = '[out:json][timeout:20];(' + selector + ');out center tags 80;';
     const overpass = await fetch("https://overpass-api.de/api/interpreter", {
       method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
       body: "data=" + encodeURIComponent(query), signal: AbortSignal.timeout(25000)
