@@ -71,12 +71,12 @@ Required Netlify environment variables:
 
 Setup:
 1. Create the Supabase project and run `supabase/schema.sql`.
-2. Run `supabase/licensing.sql`.
-3. Create your own Supabase Auth user using an email you control and a strong unique password. Enable MFA in Supabase Auth where available.
-4. In the Supabase SQL Editor, verify your Auth user UUID, then grant the owner role only to that exact account by inserting/updating its `public.profiles` row with `role='owner'`. Never let public signup or client-side code set owner role.
-5. Add the three environment variables above to Netlify and redeploy the development branch.
-6. Visit `/admin/` and test sign-in, create pending licence, update status and save brand workspace.
+2. Create your own user in Supabase Authentication. Use a unique password and enable MFA if available.
+3. Copy that user's UUID from Authentication → Users. In the Supabase SQL Editor, run `supabase/owner-security.sql` after replacing the UUID in its final provisioning statement; uncomment that statement first. Verify the row shows `role = 'owner'`. Never allow public signup or browser code to set owner role.
+4. Run `supabase/licensing.sql`.
+5. Add the three Supabase environment variables above to Netlify. Also set `SITE_ORIGIN` to the exact deployed site origin (for example `https://your-site.netlify.app`, with no trailing slash). Netlify supplies `DEPLOY_PRIME_URL` for deploy previews. Redeploy the development branch.
+6. Visit `/admin/` and test sign-in, create a pending licence, update status and save a brand workspace. Do not activate a licence until the agreement is signed and payment is independently verified.
 
-Security boundaries: the dashboard does not store the password or access token in localStorage; the access token exists in page memory and is cleared on sign-out/refresh. The owner API revalidates the Supabase user and owner role on every request. Keep the service-role key private. A licence status change is not proof of payment; manually verify signed agreements and cleared funds before activation.
+Security boundaries: the dashboard does not store the password or access token in localStorage; the access token exists in page memory and is cleared on sign-out/refresh. The owner API revalidates the Supabase user and owner role on every request, restricts browser origins to `SITE_ORIGIN` and Netlify's deploy-preview origin, and validates fee amounts. Keep the service-role key private. Configure Supabase Auth MFA and monitor failed sign-ins; this version does not yet include an application-level rate limiter or automated security test suite. A licence status change is not proof of payment; manually verify signed agreements and cleared funds before activation.
 
 Current scope: owner-only licence listing/creation/status changes and basic brand workspace records. Investor accounts, tenant-scoped access, customer data isolation, automated renewals/expiry enforcement, custom-domain provisioning, billing and production security testing are not implemented. Do not sell or advertise these as completed features yet. Use a qualified local lawyer to review franchise/licence agreements and investor disclosures.
