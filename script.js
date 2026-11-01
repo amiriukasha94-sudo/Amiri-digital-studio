@@ -64,3 +64,7 @@ if(leadForm){
   const url=URL.createObjectURL(new Blob([csv],{type:"text/csv"})),a=document.createElement("a");a.href=url;a.download="amiri-saved-leads.csv";a.click();URL.revokeObjectURL(url);
  });
 }
+
+/* MTN manual payment reference submission */
+const paymentForm=document.querySelector("#payment-submit-form");
+if(paymentForm){paymentForm.addEventListener("submit",async e=>{e.preventDefault();const btn=document.querySelector("#payment-submit-btn"),status=document.querySelector("#payment-status");btn.disabled=true;btn.textContent="Submitting…";status.textContent="Saving your payment reference.";const data=Object.fromEntries(new FormData(paymentForm).entries());data.consent=paymentForm.querySelector('[name="consent"]').checked;try{const r=await fetch("/.netlify/functions/payment-submit",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)}),out=await r.json();if(!r.ok)throw Error(out.error||"Submission failed.");status.textContent=out.message||"Reference received. Await manual verification.";paymentForm.reset();}catch(err){status.textContent=err.message;btn.disabled=false;btn.textContent="Submit payment reference ↗";}});}
