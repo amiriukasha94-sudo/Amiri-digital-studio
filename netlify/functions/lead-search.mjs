@@ -147,6 +147,18 @@ export default async (req) => {
     }[category];
     const found = new Map();
     const photonFailures = [];
+    // City-level searches are constrained to a 35 km radius around the
+    // resolved city centre. Region/country searches use broader bounds.
+    const placeKind = String(place.type || place.addresstype || "").toLowerCase();
+    const searchRadiusKm = /country/.test(placeKind) ? 250 : /state|region|county/.test(placeKind) ? 120 : 35;
+    const toRad = value => value * Math.PI / 180;
+    const distanceKm = (aLat, aLon, bLat, bLon) => {
+      const dLat = toRad(bLat - aLat), dLon = toRad(bLon - aLon);
+      const h = Math.sin(dLat/2)**2 + Math.cos(toRad(aLat))*Math.cos(toRad(bLat))*Math.sin(dLon/2)**2;
+      return 6371 * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1-h));
+    };
+    const genericNames = new Set(["business","businesses","house","locality","place","shop","store","building","company","unnamed","unknown","office"]);
+    const businessKeys = new Set(["shop","amenity","tourism","office","craft","healthcare","leisure"]);
     for (const term of photonTerms) {
       try {
         const endpoint = "https://photon.komoot.io/api/?q=" + encodeURIComponent(term) +
@@ -166,27 +178,41 @@ export default async (req) => {
         catch { photonFailures.push(term + ": invalid JSON"); continue; }
         for (const feature of payload.features || []) {
           const p = feature.properties || {};
-          const name = p.name || p.street || "";
-          if (!p.name) continue;
+          const name = String(p.name || "").trim();
+          if (!name || genericNames.has(name.toLowerCase()) || name.length < 3) continue;
           const coords = feature.geometry?.coordinates || [];
+          const itemLat = Number(coords[1]), itemLon = Number(coords[0]);
+          if (!Number.isFinite(itemLat) || !Number.isFinite(itemLon)) continue;
+          if (distanceKm(lat, lon, itemLat, itemLon) > searchRadiusKm) continue;
+          const osmKey = String(p.osm_key || "").toLowerCase();
+          const osmValue = String(p.osm_value || "").toLowerCase();
+          if (!businessKeys.has(osmKey)) continue;
+          if (category === "restaurant" && !(osmKey === "amenity" && /restaurant|cafe|fast_food|bar/.test(osmValue))) continue;
+          if (category === "retail" && osmKey !== "shop") continue;
+          if (category === "beauty" && !(osmKey === "shop" && /beauty|hairdresser|cosmetics/.test(osmValue))) continue;
+          if (category === "hotel" && !(osmKey === "tourism" && /hotel|guest_house|hostel/.test(osmValue))) continue;
+          if (category === "professional" && osmKey !== "office") continue;
+          if (category === "health" && !((osmKey === "amenity" && /clinic|doctors|dentist|pharmacy/.test(osmValue)) || osmKey === "healthcare")) continue;
           const key = String(p.osm_type || p.osm_value || "") + "-" + String(p.osm_id || name.toLowerCase() + "-" + (p.city || ""));
           const website = p.website || p.url || "";
           const phone = p.phone || "";
+          const email = p.email || "";
           const address = [p.housenumber, p.street, p.city, p.state, p.country].filter(Boolean).join(", ");
           const type = p.type || p.osm_value || p.osm_key || category;
-          const score = (!website ? 60 : 10) + (phone ? 15 : 0);
+          // Scores reflect lead completeness/opportunity, not verified sales intent.
+          const score = (!website ? 45 : 5) + (phone ? 20 : 0) + (email ? 15 : 0) + (address ? 5 : 0) + (name.length > 5 ? 5 : 0);
           const item = {
             id: "photon-" + key,
             name,
             category: String(type).replaceAll("_", " "),
             website,
-            websiteStatus: website ? "Website listed — review manually" : "No website returned — verify manually",
+            websiteStatus: website ? "Website listed — review manually" : "No website recorded in this listing — verify manually",
             phone,
-            email: "",
+            email,
             score,
             address,
-            lat: Number.isFinite(coords[1]) ? coords[1] : null,
-            lon: Number.isFinite(coords[0]) ? coords[0] : null,
+            lat: itemLat,
+            lon: itemLon,
             source: "OpenStreetMap via Photon",
             sourceUrl: p.osm_id && p.osm_type
               ? "https://www.openstreetmap.org/" + (p.osm_type === "R" ? "relation" : p.osm_type === "W" ? "way" : "node") + "/" + p.osm_id
@@ -210,8 +236,9 @@ export default async (req) => {
     return json({
       location: place.display_name,
       count: leads.length,
+      searchRadiusKm,
       provider: "OpenStreetMap via Photon",
-      note: "Photon searches OpenStreetMap place records. Coverage varies by city. Missing contact details or websites are not proof that a business lacks them; verify each lead before outreach.",
+      note: "Results are limited to the searched area and filtered to named business-type records. OpenStreetMap coverage varies. A missing website or contact field is not proof the business lacks it; verify each lead before outreach.",
       leads
     });
   } catch (e) {
