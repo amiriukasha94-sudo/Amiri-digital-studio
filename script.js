@@ -110,3 +110,6 @@ if(currencySelect){
  };
  loadCurrencies();
 }
+
+/* Scroll reveal with reduced-motion and browser fallback support */
+(()=>{const reduced=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;if(reduced||!('IntersectionObserver' in window))return;const targets=document.querySelectorAll('main section:not(.hero),.partner-wrap,.partner-hero');targets.forEach(el=>el.classList.add('amiri-reveal-pending'));const io=new IntersectionObserver(entries=>entries.forEach(entry=>{if(entry.isIntersecting){entry.target.classList.add('amiri-revealed');io.unobserve(entry.target)}}),{threshold:.12,rootMargin:'0px 0px -35px 0px'});targets.forEach(el=>io.observe(el));})();
