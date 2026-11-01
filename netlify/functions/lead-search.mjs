@@ -33,7 +33,7 @@ export default async (req) => {
     const place = places[0], lat = Number(place.lat), lon = Number(place.lon);
     const radius = 12000;
     const selector = categories[category].replaceAll("RADIUS", String(radius)).replaceAll("LAT", String(lat)).replaceAll("LON", String(lon));
-    const query = '[out:json][timeout:20];(' + selector + ');out center tags 80;';
+    const query = '[out:json][timeout:20];(' + selector + ');out tags center 80;';
     const overpass = await fetch("https://overpass-api.de/api/interpreter", {
       method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
       body: "data=" + encodeURIComponent(query), signal: AbortSignal.timeout(25000)
