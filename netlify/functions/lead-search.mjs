@@ -232,35 +232,40 @@ export default async (req) => {
     }
     const leads = Array.from(found.values()).sort((a,b) => b.score-a.score).slice(0,80);
 
-    // Enrich a limited number of leads from the public OSM object details.
-    // These fields are optional and only shown when explicitly present in OSM.
-    const enrichable = leads.filter(x => x.osmType && x.osmId).slice(0,4);
-    // Respect the public Nominatim service's one-request-per-second usage policy.
-    for (const lead of enrichable) {
-      try {
-        const detailUrl = "https://nominatim.openstreetmap.org/details?osmtype=" +
-          encodeURIComponent(lead.osmType) + "&osmid=" + encodeURIComponent(lead.osmId) +
-          "&class=" + encodeURIComponent(lead.osmClass || "") + "&addressdetails=1&hierarchy=0&group_hierarchy=0&format=json";
-        const response = await fetch(detailUrl, {
-          headers: { "User-Agent": "AmiriDigitalStudioLeadFinder/1.0 (public OSM contact enrichment)", "Accept": "application/json" },
-          signal: AbortSignal.timeout(4500)
-        });
-        if (!response.ok || !(response.headers.get("content-type") || "").includes("json")) continue;
-        const detail = await response.json();
-        const tags = detail.extratags || detail.tags || {};
-        lead.phone = tags.phone || tags["contact:phone"] || lead.phone || "";
-        lead.email = tags.email || tags["contact:email"] || lead.email || "";
-        lead.website = tags.website || tags["contact:website"] || lead.website || "";
-        lead.websiteStatus = lead.website ? "Website listed — review manually" : "No website recorded in this listing — verify manually";
-        lead.facebook = tags["contact:facebook"] || tags.facebook || lead.facebook || "";
-        lead.instagram = tags["contact:instagram"] || tags.instagram || lead.instagram || "";
-        lead.openingHours = tags.opening_hours || lead.openingHours || "";
-        lead.contactSource = "OpenStreetMap object details";
-        lead.score = (!lead.website ? 45 : 5) + (lead.phone ? 20 : 0) + (lead.email ? 15 : 0) + (lead.address ? 5 : 0) + (lead.name.length > 5 ? 5 : 0);
-      } catch (error) {
-        // Keep the base listing if optional contact enrichment is unavailable.
+    // Read raw OpenStreetMap tags for a small, rate-conscious batch.
+    // Photon search responses omit many contact:* tags, while the OSM object API
+    // exposes the public tags that contributors actually entered.
+    const enrichable = leads.filter(x => x.osmType && x.osmId).slice(0,12);
+    let enrichIndex = 0;
+    const enrichWorker = async () => {
+      while (enrichIndex < enrichable.length) {
+        const lead = enrichable[enrichIndex++];
+        try {
+          const type = ({N:"node",W:"way",R:"relation"})[String(lead.osmType).toUpperCase()];
+          if (!type) continue;
+          const response = await fetch("https://api.openstreetmap.org/api/0.6/" + type + "/" +
+            encodeURIComponent(lead.osmId) + ".json", {
+              headers: { "Accept": "application/json" },
+              signal: AbortSignal.timeout(5000)
+            });
+          if (!response.ok || !(response.headers.get("content-type") || "").includes("json")) continue;
+          const detail = await response.json();
+          const tags = detail.elements?.[0]?.tags || {};
+          lead.phone = tags.phone || tags["contact:phone"] || tags.mobile || tags["contact:mobile"] || lead.phone || "";
+          lead.email = tags.email || tags["contact:email"] || lead.email || "";
+          lead.website = tags.website || tags["contact:website"] || lead.website || "";
+          lead.websiteStatus = lead.website ? "Website listed — review manually" : "No website recorded in this listing — verify manually";
+          lead.facebook = tags["contact:facebook"] || tags.facebook || lead.facebook || "";
+          lead.instagram = tags["contact:instagram"] || tags.instagram || lead.instagram || "";
+          lead.openingHours = tags.opening_hours || lead.openingHours || "";
+          lead.contactSource = "OpenStreetMap public tags";
+          lead.score = (!lead.website ? 45 : 5) + (lead.phone ? 20 : 0) + (lead.email ? 15 : 0) + (lead.address ? 5 : 0) + (lead.name.length > 5 ? 5 : 0);
+        } catch (error) {
+          // Contact details are optional; keep the valid base listing.
+        }
       }
-    }
+    };
+    await Promise.all(Array.from({length: 3}, () => enrichWorker()));
     leads.sort((a,b) => b.score-a.score);
 
     if (!leads.length) {
