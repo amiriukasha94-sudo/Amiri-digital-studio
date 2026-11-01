@@ -41,7 +41,7 @@ export default async (req) => {
     const text = "🔔 NEW AMIRI STUDIO ENQUIRY\n\n" + brief + "\n\nAirtable record: " + recordId + "\nReview and approve scope manually before starting. Nothing has been sent to the customer.";
     const t = await fetch("https://api.telegram.org/bot" + env.TELEGRAM_BOT_TOKEN + "/sendMessage", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chat_id: env.TELEGRAM_CHAT_ID, text, disable_web_page_preview: true })
+      body: JSON.stringify({ chat_id: env.TELEGRAM_CHAT_ID, text, disable_web_page_preview: true, reply_markup: { inline_keyboard: [[{ text: "✅ Approve for production planning", callback_data: "approve:" + recordId }, { text: "❌ Reject enquiry", callback_data: "reject:" + recordId }]] } })
     });
     const tr = await t.json();
     if (!t.ok || !tr.ok) throw new Error("Enquiry saved to Airtable, but Telegram notification failed.");
