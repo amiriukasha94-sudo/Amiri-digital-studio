@@ -22,7 +22,18 @@ const SB_URL="https://lsbaldpeillqsmmaplef.supabase.co";
 const SB_KEY="sb_publishable_GLO9G1rXCNG6ax4qltqOSw__YCv9jMq";
 const sb=window.supabase.createClient(SB_URL,SB_KEY);let currentUser=null,admin=false,editing=null;
 const $=id=>document.getElementById(id);const msg=(id,t)=>$(id).textContent=t;
-$("google").onclick=async()=>{const {error}=await sb.auth.signInWithOAuth({provider:"google",options:{redirectTo:location.href.split("?")[0]}});if(error)msg("authMsg",error.message)};
+$("google").onclick=async()=>{
+  msg("authMsg","Opening Google sign-in…");
+  const popup=window.open("about:blank","amiri-google-signin","popup,width=520,height=680");
+  if(!popup){msg("authMsg","Popup blocked. Allow popups for this site and try again.");return}
+  try{
+    const {data,error}=await sb.auth.signInWithOAuth({provider:"google",options:{redirectTo:location.origin+location.pathname,skipBrowserRedirect:true}});
+    if(error)throw error;
+    if(!data?.url)throw new Error("Google sign-in URL was not returned.");
+    popup.location.href=data.url;
+    msg("authMsg","Complete Google sign-in in the popup.");
+  }catch(error){popup.close();msg("authMsg","Google sign-in failed: "+error.message)}
+};
 $("emailForm").onsubmit=async e=>{e.preventDefault();const {error}=await sb.auth.signInWithOtp({email:$("email").value.trim(),options:{shouldCreateUser:true}});msg("authMsg",error?"Error: "+error.message:"Code sent to your email.");if(!error)$("otpForm").classList.remove("hidden")};
 $("otpForm").onsubmit=async e=>{e.preventDefault();const {error}=await sb.auth.verifyOtp({email:$("email").value.trim(),token:$("otp").value.trim(),type:"email"});if(error)msg("authMsg",error.message);else await boot()};
 $("signout").onclick=async()=>{await sb.auth.signOut();location.reload()};
@@ -37,5 +48,5 @@ $("preview").onclick=()=>{const s=editing?.slug||slugify($("slug").value);if(s)w
 async function loadAdmin(){const {data,error}=await sb.from("customer_websites").select("id,owner_id,site_name,slug,status,created_at").order("created_at",{ascending:false});const box=$("allSites");box.replaceChildren();if(error){box.textContent=error.message;return}for(const s of data||[]){const d=document.createElement("div");d.className="site";const t=document.createElement("strong");t.textContent=s.site_name+" ("+s.slug+")";const p=document.createElement("p");p.className="muted";p.textContent="Owner: "+s.owner_id+" · "+s.status;const suspend=document.createElement("button");suspend.textContent=s.status==="suspended"?"Restore":"Suspend";suspend.onclick=async()=>{const {error}=await sb.from("customer_websites").update({status:s.status==="suspended"?"draft":"suspended"}).eq("id",s.id);if(error)alert(error.message);else loadAdmin()};d.append(t,p,suspend);box.append(d)}}
 $("adminRefresh").onclick=loadAdmin;
 async function boot(){const {data:{user}}=await sb.auth.getUser();if(!user){$("login").classList.remove("hidden");$("app").classList.add("hidden");return}currentUser=user;admin=user.app_metadata?.role==="owner";$("login").classList.add("hidden");$("app").classList.remove("hidden");$("adminRefresh").classList.toggle("hidden",!admin);$("adminPanel").classList.toggle("hidden",!admin);await loadSites();if(admin)await loadAdmin()}
-sb.auth.onAuthStateChange(()=>setTimeout(boot,0));boot();
+sb.auth.onAuthStateChange((event)=>{if(event==="SIGNED_IN"){setTimeout(boot,0);if(window.opener&&!window.opener.closed){window.close()}}else if(event==="SIGNED_OUT"){setTimeout(boot,0)}});boot();
 </script></body></html>
