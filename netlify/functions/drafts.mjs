@@ -12,7 +12,8 @@ export default async req=>{
    const token=url.searchParams.get("token")||"";if(!/^[a-f0-9]{64}$/.test(token))return json({error:"Invalid or expired draft link."},404);
    const rows=await db("website_draft_shares?token_hash=eq."+await digest(token)+"&select=id,client_name,business_name,brief,html_content,status,client_feedback,created_at,updated_at,expires_at");
    const d=rows[0];if(!d||new Date(d.expires_at)<new Date())return json({error:"This draft link has expired or does not exist."},404);
-   return json({draft:d});
+   const revisions=await db("website_draft_revisions?draft_id=eq."+d.id+"&select=revision_number,note,created_at&order=revision_number.desc");
+   return json({draft:d,revisions});
   }
   if(req.method!=="POST")return json({error:"Method not allowed."},405);
   const body=await req.json(), action=body.action;
