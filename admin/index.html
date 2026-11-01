@@ -29,11 +29,31 @@ else if(activeTab==='updates'){root.innerHTML=updates.length?updates.map(u=>'<ar
 else {root.innerHTML='<p><b>Role-based access is active.</b></p><p class="muted">Owner: full workspace permissions. Staff: assigned-project permissions. Staff invitations and assignment controls are not yet implemented in this release.</p><p>To add staff safely, use Supabase Authentication to create their account, then assign the staff role through the trusted project dashboard. Do not promote users through the public website.</p>';}
 }
 $('loginForm').addEventListener('submit',async e=>{e.preventDefault();$('loginBtn').disabled=true;$('loginMsg').textContent='Signing in…';const f=new FormData(e.target);try{const {data,error}=await db.auth.signInWithPassword({email:f.get('email'),password:f.get('password')});if(error)throw error;await start(data.user);}catch(err){$('loginMsg').textContent=err.message||'Sign-in failed.';}finally{$('loginBtn').disabled=false;}});
-async function start(user){await loadProfile(user);$('login').classList.add('hidden');$('workspace').classList.remove('hidden');await loadData();}
+let startPromise=null;
+async function start(user){
+ if(startPromise)return startPromise;
+ startPromise=(async()=>{
+  $('loginBtn').disabled=true;$('loginMsg').textContent='Checking account access…';
+  try{
+   await loadProfile(user);
+   $('login').classList.add('hidden');$('workspace').classList.remove('hidden');
+   try{await loadData();$('loginMsg').textContent='';}
+   catch(error){msg('Signed in, but records could not load: '+(error.message||'Database request failed')+'. Check access policies, then select Refresh.');}
+  }catch(error){$('workspace').classList.add('hidden');$('login').classList.remove('hidden');$('loginMsg').textContent=error.message||'Account verification failed.';throw error;}
+  finally{$('loginBtn').disabled=false;}
+ })().finally(()=>{startPromise=null;});
+ return startPromise;
+}
 $('logout').onclick=async()=>{await db.auth.signOut();profile=null;$('workspace').classList.add('hidden');$('login').classList.remove('hidden');$('who').textContent='';};
 $('refresh').onclick=()=>loadData().catch(e=>msg(e.message));
 document.querySelectorAll('[data-tab]').forEach(b=>b.addEventListener('click',()=>{activeTab=b.dataset.tab;render()}));
-$('records').addEventListener('click',async e=>{const id=e.target.dataset.saveOrder;if(id){const status=$('records').querySelector('[data-status="'+CSS.escape(id)+'"]').value;const {error}=await db.from('orders').update({status}).eq('id',id);if(error)msg(error.message);else await loadData();return;}const orderId=e.target.dataset.quote;if(orderId){const amount=prompt('Quotation amount in UGX (numbers only):');if(amount===null)return;if(!/^\d+(\.\d{1,2})?$/.test(amount)){msg('Enter a valid amount.');return;}const scope=prompt('Quotation scope / deliverables:');if(scope===null)return;const terms=prompt('Payment terms (payment is arranged after customer approval):','Payment details will be agreed after quotation approval.');if(terms===null)return;const {error}=await db.from('quotations').insert({order_id:orderId,version:1,amount:Number(amount),currency:'UGX',scope,terms,status:'sent',created_by:profile.id});if(error)msg(error.message);else{await db.from('orders').update({status:'quoted'}).eq('id',orderId);await loadData();msg('Quotation saved to the shared database. Customer notification is not yet configured.');}}});
-db.auth.onAuthStateChange((event,session)=>{if(event==='SIGNED_OUT')return;if(session&&$('workspace').classList.contains('hidden'))start(session.user).catch(e=>{$('loginMsg').textContent=e.message;db.auth.signOut();});});
+$('records').addEventListener('click',async e=>{const id=e.target.dataset.saveOrder;if(id){const status=$('records').querySelector('[data-status="'+CSS.escape(id)+'"]').value;const {error}=await db.from('orders').update({status}).eq('id',id);if(error)msg(error.message);else await loadData();return;}const orderId=e.target.dataset.quote;if(orderId){const amount=prompt('Quotation amount in UGX (numbers only):');if(amount===null)return;if(!/^\d+(\.\d{1,2})?$/.test(amount)){msg('Enter a valid amount.');return;}const scope=prompt('Quotation scope / deliverables:');if(scope===null)return;const terms=prompt('Payment terms (payment is arranged after customer approval):','Payment details will be agreed after quotation approval.');if(terms===null)return;const latest=quotes.filter(q=>q.order_id===orderId).reduce((n,q)=>Math.max(n,Number(q.version)||0),0);
+const {data:saved,error}=await db.from('quotations').insert({order_id:orderId,version:latest+1,amount:Number(amount),currency:'UGX',scope,terms,status:'sent',created_by:profile.id}).select('id').single();
+if(error){msg('Quotation was not saved: '+error.message);return;}
+const {error:orderError}=await db.from('orders').update({status:'quoted'}).eq('id',orderId);
+await loadData();
+if(orderError)msg('Quotation saved, but order status was not updated: '+orderError.message);
+else msg('Quotation saved. Customer notification is not configured yet.');}});
+// Auth state is initialized once below; sign-in submits call start() directly.
 const {data:{session}}=await db.auth.getSession();if(session){try{await start(session.user)}catch(e){$('loginMsg').textContent=e.message;await db.auth.signOut();}}
 </script></body></html>
