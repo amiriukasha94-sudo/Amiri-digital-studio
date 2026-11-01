@@ -22,9 +22,16 @@ if(leadForm){
   e.preventDefault();const location=document.querySelector("#lead-location").value.trim(),category=document.querySelector("#lead-category").value;
   searchBtn.disabled=true;searchBtn.textContent="Searching…";countBox.textContent="Searching public listings…";resultBox.innerHTML='<p class="lead-empty">Contacting the public business directory. This can take several seconds.</p>';
   try{
-   const r=await fetch("/.netlify/functions/lead-search?location="+encodeURIComponent(location)+"&category="+encodeURIComponent(category));
-   const data=await r.json();if(!r.ok)throw Error(data.error||"Search failed.");
-   currentLeads=data.leads||[];render(currentLeads);countBox.textContent=currentLeads.length+" businesses found near "+data.location+" · "+data.radiusKm+" km search area";exportBtn.disabled=!currentLeads.length;
+   const r=await fetch("/.netlify/functions/lead-search?location="+encodeURIComponent(location)+"&category="+encodeURIComponent(category),{headers:{"Accept":"application/json"}});
+   const contentType=r.headers.get("content-type")||"";
+   const raw=await r.text();
+   if(!contentType.toLowerCase().includes("json")){
+    console.error("Lead search returned non-JSON:",r.status,contentType,raw.slice(0,500));
+    throw Error("The lead-search service returned a webpage instead of data (HTTP "+r.status+"). The latest backend may not be deployed yet. Open the preview again after Netlify finishes deploying.");
+   }
+   let data;try{data=JSON.parse(raw)}catch{throw Error("The lead-search service returned invalid data. Please retry after the site deployment finishes.");}
+   if(!r.ok)throw Error(data.error||"Search failed (HTTP "+r.status+").");
+   currentLeads=data.leads||[];render(currentLeads);countBox.textContent=currentLeads.length+" businesses found near "+(data.location||location)+(data.radiusKm?" · "+data.radiusKm+" km search area":"");exportBtn.disabled=!currentLeads.length;
   }catch(err){countBox.textContent="Search unavailable";resultBox.innerHTML='<p class="lead-empty">'+esc(err.message)+'</p>'}
   finally{searchBtn.disabled=false;searchBtn.textContent="Search businesses ↗"}
  });
