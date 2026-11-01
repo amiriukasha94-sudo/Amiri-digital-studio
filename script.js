@@ -68,3 +68,45 @@ if(leadForm){
 /* MTN manual payment reference submission */
 const paymentForm=document.querySelector("#payment-submit-form");
 if(paymentForm){paymentForm.addEventListener("submit",async e=>{e.preventDefault();const btn=document.querySelector("#payment-submit-btn"),status=document.querySelector("#payment-status");btn.disabled=true;btn.textContent="Submitting…";status.textContent="Saving your payment reference.";const data=Object.fromEntries(new FormData(paymentForm).entries());data.consent=paymentForm.querySelector('[name="consent"]').checked;try{const r=await fetch("/.netlify/functions/payment-submit",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)}),out=await r.json();if(!r.ok)throw Error(out.error||"Submission failed.");status.textContent=out.message||"Reference received. Await manual verification.";paymentForm.reset();}catch(err){status.textContent=err.message;btn.disabled=false;btn.textContent="Submit payment reference ↗";}});}
+
+
+/* Live package currency display — all currencies supplied by the exchange-rate feed */
+const currencySelect=document.querySelector("#price-currency");
+if(currencySelect){
+ const priceNodes=[...document.querySelectorAll(".converted-price[data-base-ugx]")];
+ const note=document.querySelector("#currency-rate-note");
+ const formatMoney=(amount,code)=>new Intl.NumberFormat(undefined,{style:"currency",currency:code,maximumFractionDigits:code==="UGX"||code==="JPY"||code==="KRW"?0:2}).format(amount);
+ const showPrices=(code,rate)=>{
+  priceNodes.forEach(node=>{const base=Number(node.dataset.baseUgx);node.innerHTML=code==="UGX"?"UGX "+base.toLocaleString()+" <small>/ week</small>":formatMoney(base*rate,code)+" <small>/ week</small>";});
+ };
+ const loadCurrencies=async()=>{
+  try{
+   let payload=null;
+   const cached=localStorage.getItem("amiriCurrencyRates");
+   if(cached){try{const parsed=JSON.parse(cached);if(Date.now()-parsed.savedAt<12*60*60*1000)payload=parsed.payload;}catch{}}
+   if(!payload){
+    const response=await fetch("https://open.er-api.com/v6/latest/UGX",{cache:"no-store"});
+    if(!response.ok)throw Error("Exchange-rate service unavailable");
+    payload=await response.json();
+    if(payload.result!=="success"||!payload.rates)throw Error("Exchange-rate data unavailable");
+    try{localStorage.setItem("amiriCurrencyRates",JSON.stringify({savedAt:Date.now(),payload}));}catch{}
+   }
+   const rates=payload.rates;
+   const codes=Object.keys(rates).filter(code=>/^[A-Z]{3}$/.test(code)&&Number.isFinite(Number(rates[code]))&&Number(rates[code])>0).sort();
+   if(!codes.includes("UGX"))codes.unshift("UGX");
+   currencySelect.innerHTML=codes.map(code=>'<option value="'+code+'">'+code+'</option>').join("");
+   currencySelect.value="UGX";
+   showPrices("UGX",1);
+   currencySelect.addEventListener("change",()=>{
+    const code=currencySelect.value,rate=code==="UGX"?1:Number(rates[code]);
+    showPrices(code,rate);
+    note.textContent="Indicative conversion from UGX. Exchange rates are provided by an external service; your bank or transfer provider may apply different rates and fees. Payment remains due in UGX unless agreed directly.";
+   });
+   note.textContent="Showing UGX prices. "+codes.length+" supported currencies available. Updated: "+(payload.time_last_update_utc||"latest feed")+". Converted prices are estimates only; payment remains due in UGX.";
+  }catch(error){
+   currencySelect.innerHTML='<option value="UGX">UGX — Ugandan Shilling</option>';
+   note.textContent="Live currency conversion is temporarily unavailable. Package prices remain in UGX.";
+  }
+ };
+ loadCurrencies();
+}
