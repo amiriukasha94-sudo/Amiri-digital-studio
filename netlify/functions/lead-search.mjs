@@ -23,6 +23,74 @@ export default async (req) => {
     const category = (u.searchParams.get("category") || "all").toLowerCase();
     if (location.length < 2) return json({ error: "Enter a city, region or country." }, 400);
     if (!categories[category]) return json({ error: "Choose a supported business category." }, 400);
+
+    // Primary provider: Google Places. Keep the API key in Netlify environment variables.
+    const googleKey = process.env.GOOGLE_PLACES_API_KEY;
+    if (googleKey) {
+      const categoryTerms = {
+        all: "businesses",
+        restaurant: "restaurants and cafes",
+        retail: "retail shops and stores",
+        beauty: "beauty salons hairdressers and cosmetics shops",
+        hotel: "hotels and accommodation",
+        professional: "professional services and offices",
+        health: "clinics dentists pharmacies and healthcare businesses"
+      };
+      const response = await fetch("https://places.googleapis.com/v1/places:searchText", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Goog-Api-Key": googleKey,
+          "X-Goog-FieldMask": "places.id,places.displayName,places.formattedAddress,places.websiteUri,places.nationalPhoneNumber,places.primaryTypeDisplayName,places.googleMapsUri"
+        },
+        body: JSON.stringify({
+          textQuery: categoryTerms[category] + " in " + location,
+          maxResultCount: 20,
+          languageCode: "en"
+        }),
+        signal: AbortSignal.timeout(20000)
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        console.error("Google Places error:", response.status, payload);
+        const message = response.status === 403
+          ? "Google Places access is not enabled or billing/API-key restrictions need attention in Google Cloud."
+          : response.status === 429
+            ? "Google Places request limit reached. Try again later."
+            : "Google Places search failed. Check the API key and Places API configuration.";
+        return json({ error: message, provider: "Google Places" }, response.status === 429 ? 429 : 502);
+      }
+      const leads = (payload.places || []).map(place => {
+        const website = place.websiteUri || "";
+        const phone = place.nationalPhoneNumber || "";
+        const name = place.displayName?.text || "Unnamed business";
+        return {
+          id: "google-" + place.id,
+          name,
+          category: place.primaryTypeDisplayName?.text || categoryTerms[category],
+          website,
+          websiteStatus: website ? "Website listed — review manually" : "No website returned — verify manually",
+          phone,
+          email: "",
+          score: (website ? 10 : 55) + (phone ? 15 : 0),
+          address: place.formattedAddress || "",
+          source: "Google Places",
+          sourceUrl: place.googleMapsUri || "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(name + " " + (place.formattedAddress || location))
+        };
+      });
+      return json({
+        location,
+        count: leads.length,
+        provider: "Google Places",
+        note: "Business details are provided by Google Places. A missing website means Google did not return one; verify independently before outreach.",
+        leads
+      });
+    }
+    return json({
+      error: "Google Places is not configured yet. Add GOOGLE_PLACES_API_KEY in Netlify site environment variables to enable reliable business search. The free public-directory fallback is currently unavailable.",
+      setupRequired: true,
+      provider: "Google Places"
+    }, 503);
     const geoRes = await fetch("https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q=" + encodeURIComponent(location), {
       headers: { "User-Agent": "AmiriDigitalStudioLeadFinder/1.0 (public business directory search)" },
       signal: AbortSignal.timeout(10000)
