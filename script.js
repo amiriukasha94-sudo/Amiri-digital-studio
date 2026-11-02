@@ -8,6 +8,7 @@ if(leadForm){
  const resultBox=document.querySelector("#lead-results"),countBox=document.querySelector("#lead-count"),searchBtn=document.querySelector("#lead-search-button"),exportBtn=document.querySelector("#lead-export");
  let currentLeads=[];
  const readSaved=()=>{try{return JSON.parse(localStorage.getItem("amiriSavedLeads")||"[]")}catch{return []}};
+ const getActivationCode=()=>{let code=sessionStorage.getItem("amiriLeadCode")||"";if(!code){code=prompt("Enter your Amiri Lead Finder activation code:")||"";code=code.trim().toUpperCase();if(code)sessionStorage.setItem("amiriLeadCode",code);}return code;};
  const writeSaved=rows=>{try{localStorage.setItem("amiriSavedLeads",JSON.stringify(rows))}catch{}};
  const esc=v=>String(v||"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
  const countryDial={"uganda":"256","kenya":"254","tanzania":"255","rwanda":"250","burundi":"257","south sudan":"211","nigeria":"234","ghana":"233","south africa":"27","united states":"1","usa":"1","united kingdom":"44","uk":"44","india":"91","guinea":"224"};
@@ -33,7 +34,8 @@ if(leadForm){
   e.preventDefault();const location=document.querySelector("#lead-location").value.trim(),category=document.querySelector("#lead-category").value;
   searchBtn.disabled=true;searchBtn.textContent="Searching…";countBox.textContent="Searching public listings…";resultBox.innerHTML='<p class="lead-empty">Contacting the public business directory. This can take several seconds.</p>';
   try{
-   const r=await fetch("/.netlify/functions/lead-search?location="+encodeURIComponent(location)+"&category="+encodeURIComponent(category),{headers:{"Accept":"application/json"}});
+   const activationCode=getActivationCode();if(!activationCode)throw Error("An activation code is required. Contact Amiri Digital Studio to purchase access.");
+   const r=await fetch("/.netlify/functions/lead-search?location="+encodeURIComponent(location)+"&category="+encodeURIComponent(category)+"&code="+encodeURIComponent(activationCode),{headers:{"Accept":"application/json"}});
    const contentType=r.headers.get("content-type")||"";
    const raw=await r.text();
    if(!contentType.toLowerCase().includes("json")){
