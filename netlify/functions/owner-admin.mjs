@@ -1,4 +1,4 @@
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { createHmac, timingSafeEqual, randomBytes, createHash } from "node:crypto";
 const env=n=>process.env[n]||"";
 const b64=v=>Buffer.from(v).toString("base64url");
 const signature=value=>createHmac("sha256",env("ADMIN_SESSION_SECRET")).update(value).digest();
@@ -23,6 +23,25 @@ export default async req=>{
   }
   const token=(req.headers.get("authorization")||"").replace(/^Bearer\s+/i,"");
   if(!validToken(token))return reply(req,{error:"Session expired. Sign in again."},401);
+  if(req.method==="POST"&&body.action==="lead_dashboard"){
+   const [licenses,logs]=await Promise.all([supabase("lead_finder_licenses?select=id,customer_name,customer_phone,status,expires_at,max_searches,searches_used,created_at,last_used_at&order=created_at.desc"),supabase("lead_finder_search_logs?select=id,license_id,location,category,searched_at&order=searched_at.desc&limit=300")]);
+   return reply(req,{licenses,logs});
+  }
+  if(req.method==="POST"&&body.action==="create_lead_license"){
+   const name=String(body.customer_name||"").trim().slice(0,120),phone=String(body.customer_phone||"").trim().slice(0,40);
+   const max=Number(body.max_searches),expires=body.expires_at?new Date(body.expires_at).toISOString():null;
+   if(!name||!Number.isInteger(max)||max<1||max>100000)return reply(req,{error:"Customer name and a search limit from 1 to 100000 are required."},400);
+   const code="AMIRI-"+randomBytes(5).toString("hex").toUpperCase();
+   const code_hash=createHash("sha256").update(code).digest("hex");
+   await supabase("lead_finder_licenses","POST",{code_hash,customer_name:name,customer_phone:phone,status:"active",expires_at:expires,max_searches:max,searches_used:0});
+   return reply(req,{code,customer_name:name,message:"Copy this activation code now. It is not stored in readable form."},201);
+  }
+  if(req.method==="PATCH"&&body.action==="set_lead_license_status"){
+   const allowed=["active","suspended","revoked"];
+   if(!body.id||!allowed.includes(body.status))return reply(req,{error:"Invalid license or status."},400);
+   const rows=await supabase("lead_finder_licenses?id=eq."+encodeURIComponent(body.id),"PATCH",{status:body.status});
+   return reply(req,{license:rows?.[0]||null});
+  }
   if(req.method==="POST"&&body.action==="dashboard"){
    const [orders,quotations,updates]=await Promise.all([supabase("orders?select=*&order=created_at.desc&limit=200"),supabase("quotations?select=*&order=created_at.desc&limit=200"),supabase("project_updates?select=*&order=created_at.desc&limit=100")]);
    return reply(req,{orders,quotations,updates});
