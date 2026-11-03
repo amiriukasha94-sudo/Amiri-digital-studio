@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 const cors = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "Content-Type",
@@ -23,6 +24,16 @@ export default async (req) => {
     const category = (u.searchParams.get("category") || "all").toLowerCase();
     if (location.length < 2) return json({ error: "Enter a city, region or country." }, 400);
     if (!categories[category]) return json({ error: "Choose a supported business category." }, 400);
+    const activationCode=(u.searchParams.get("code")||"").trim().toUpperCase();
+    if(!activationCode)return json({error:"Enter a valid Lead Finder activation code to continue.",codeRequired:true},403);
+    const codeHash=createHash("sha256").update(activationCode).digest("hex");
+    const supabaseUrl=process.env.SUPABASE_URL||"https://lsbaldpeillqsmmaplef.supabase.co";
+    const serviceKey=process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if(!serviceKey)return json({error:"Lead Finder licensing is not configured yet. Please contact the owner."},503);
+    const licenseResponse=await fetch(supabaseUrl+"/rest/v1/rpc/consume_lead_finder_license",{method:"POST",headers:{"apikey":serviceKey,"Authorization":"Bearer "+serviceKey,"Content-Type":"application/json"},body:JSON.stringify({p_code_hash:codeHash,p_location:location,p_category:category}),signal:AbortSignal.timeout(10000)});
+    const licenseResult=await licenseResponse.json().catch(()=>null);
+    if(!licenseResponse.ok||!licenseResult?.ok)return json({error:licenseResult?.reason==="expired"?"This activation code has expired.":licenseResult?.reason==="limit_reached"?"This activation code has used all its searches.":licenseResult?.reason==="suspended"?"This activation code is suspended.":licenseResult?.reason==="not_found"?"Activation code not recognised.":"Activation code could not be verified.",codeRequired:true},403);
+
 
     // Primary provider: Google Places. Keep the API key in Netlify environment variables.
     const googleKey = process.env.GOOGLE_PLACES_API_KEY;
