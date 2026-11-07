@@ -25,14 +25,14 @@ The live site entry file is `capes-king/index.html`.
 
 Do not change the existing Amiri Digital Studio site's build settings.
 
-## Admin activation (not yet assigned)
-The admin email was intentionally left blank. To activate an administrator:
-1. Create the owner's user in Supabase Authentication.
-2. Insert that exact auth user's UUID into `public.admin_users(user_id)` using the Supabase SQL editor.
-3. Keep sign-up disabled for the public; create admin accounts manually.
-4. Sign in through the **Admin** link in the storefront footer.
+## Owner admin account
+The approved owner email is `amiriukasha94@gmail.com`. A database trigger automatically adds only a newly registered account with this exact email to `public.admin_users`; other sign-ups do not receive admin access.
+1. Open the storefront and select **Admin** in the footer.
+2. Enter `amiriukasha94@gmail.com` and a strong password, then select **Create admin account**.
+3. Verify the email using the message sent by Supabase.
+4. Return to **Admin** and sign in with that email and password.
 
-Until the UUID is assigned, no account can access admin functions. RLS policies enforce the same restriction in the database.
+Do not share the password. Admin access is also enforced by database row-level security.
 
 ## Important
 Orders are saved with status `pending`. The customer must press Send in WhatsApp to message the store. No card/mobile-money payment is processed by this website. Delivery fee defaults to zero until an admin sets it.
